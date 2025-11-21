@@ -1,0 +1,28 @@
+x, y = (35, 12)
+closest_point = (32, 20)
+goal_list = []
+
+def way_to_the_closest_point():
+    x_goal, y_goal = closest_point
+
+    x_current, y_current = x, y   # point de départ
+    goal_list = []
+
+    while (x_current, y_current) != (x_goal, y_goal):
+
+        if x_current > x_goal:
+            x_current -= 1
+        elif x_current < x_goal:
+            x_current += 1
+
+        if y_current > y_goal:
+            y_current -= 1
+        elif y_current < y_goal:
+            y_current += 1
+
+        goal_list.append((x_current, y_current))
+
+    return goal_list
+
+goal_list = way_to_the_closest_point()
+print(goal_list)
