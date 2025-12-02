@@ -11,6 +11,7 @@ import numpy as np
 from my_constants import *
 from gui import GUI
 from time import sleep
+import random
 
 
 class Game:
@@ -52,6 +53,23 @@ class Game:
                         self.add_val(item.x + dx, item.y + dy, item.neighbour_percent/(i+1))
                     else:
                         self.add_val(item.x, item.y, 1)
+        
+
+    def load_walls(self,nmb):
+        L=[(0,2),(0,1),(0,0),(1,0),(2,0)]
+        self.walls=[]
+        for i in range(nmb):
+            x,y=random.randint(0,self.map_w), random.randint(0, self.map_h)
+            wall=[]
+            for k in L:
+                wall.append((k[0]+x,k[1]+y))
+
+            self.walls.append(wall)
+        
+
+            
+
+
 
     
     def add_val(self, x, y, val):

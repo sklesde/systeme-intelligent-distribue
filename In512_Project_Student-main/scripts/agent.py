@@ -38,6 +38,8 @@ class Agent:
         self.goal_list = []
         self.delay_to_moove = 0.2
         self.points_not_reached_yet = []
+        self.key_get=False
+        self.end=False
               
     def msg_cb(self): 
         """ Method used to handle incoming messages """
@@ -130,8 +132,65 @@ class Agent:
             "direction": next_move,
         }
         self.network.send(cmds)
-        sleep(self.delay_to_moove)                
-    
+        sleep(self.delay_to_moove) 
+
+    def find(self):
+        env_conf = self.network.receive()
+
+        if env_conf["cell_val"]== 0.25:
+            
+            for i in range(-1,1):
+                for j in range(-1,1):
+                    self.moove((self.x+i,self.y+j))
+                    env_conf = self.network.receive()
+                    if env_conf["cell_val"]== 0.5:
+                         for i in range(-1,1):
+                            for j in range(-1,1):
+                                self.moove((self.x+i,self.y+j))
+                                env_conf = self.network.receive()
+                                if env_conf["cell_val"]== 1:
+                                    if cmds["owner"]==self.agent_id:
+                                        self.key_get=True
+
+                                    else:
+                                        self.network.send({"header": "Key found"})
+                                        self.network.send({"INFO":(self.x,self.y,cmds["owner"])})
+                                else:
+                                    self.moove((self.x-i,self.y-j))
+
+
+
+                    else:
+                        self.moove((self.x-i,self.y-j))
+
+        elif env_conf["cell_val"]== 0.3:  
+            for i in range(-1,1):
+                for j in range(-1,1):
+                    self.moove((self.x+i,self.y+j))
+                    env_conf = self.network.receive()
+                    if env_conf["cell_val"]== 0.6:
+                         for i in range(-1,1):
+                            for j in range(-1,1):
+                                self.moove((self.x+i,self.y+j))
+                                env_conf = self.network.receive()
+                                if env_conf["cell_val"]== 1:
+                                    if cmds["owner"]==self.agent_id and self.key_get==True:
+                                        self.end=True
+                                    
+                                    else:
+                                        self.network.send({"header": "chest found"})
+                                        self.network.send({"INFO":(self.x,self.y,cmds["owner"])})
+                                else:
+                                    self.moove((self.x-i,self.y-j))
+
+
+
+                    else:
+                        self.moove((self.x-i,self.y-j))
+                        
+
+        elif env_conf["cell_val"]== 0.35:
+            pass
 
     def strategy(self):
         self.way_to_the_closest_point()
@@ -146,8 +205,30 @@ class Agent:
         i = lst.index(next_point)
 
         for point in lst[i+1:]:
-            self.moove(point)
-            self.points_not_reached_yet.remove(point)
+            msg = self.network.receive()
+            self.msg = msg
+            if msg["header"] == "Key found":
+                if msg["INFO"][2]==self.agent_id and self.get_key==False:
+                    #aller au point 
+                    #si self.x==msg["INFO"][0] and self.y==msg["INFO"][1] : self.get_key=True
+                    pass
+
+            if msg["header"] == "chest found":
+                if msg["INFO"][2]==self.agent_id:
+                    if self.get_key==True : 
+                        #aller au point 
+                        #si self.x==msg["INFO"][0] and self.y==msg["INFO"][1] : self.end=True
+                        pass
+                    else:
+                        #sauvegarder les coordonénes de l'objectif, atteindre la clé en ensuite y aller
+                        pass
+                    
+            if self.end==False:
+                self.moove(point)
+                self.points_not_reached_yet.remove(point)
+                self.find()
+
+
         print(self.points_not_reached_yet)
 
         if len(self.points_not_reached_yet)!=0:
@@ -156,12 +237,52 @@ class Agent:
             self.way_to_the_closest_point()
        
             for next_point in self.goal_list:
-                self.moove(next_point)
-            
-            for point in self.points_not_reached_yet:
+                msg = self.network.receive()
+                self.msg = msg
+                if msg["header"] == "Key found":
+                    if msg["INFO"][2]==self.agent_id and self.get_key==False:
+                        #aller au point 
+                        #si self.x==msg["INFO"][0] and self.y==msg["INFO"][1] : self.get_key=True
+                        pass
+
+                if msg["header"] == "chest found":
+                    if msg["INFO"][2]==self.agent_id:
+                        if self.get_key==True : 
+                            #aller au point 
+                            #si self.x==msg["INFO"][0] and self.y==msg["INFO"][1] : self.end=True
+                            pass
+                        else:
+                            #sauvegarder les coordonénes de l'objectif, atteindre la clé en ensuite y aller
+                            pass
                         
-                self.moove(point)
-                self.points_not_reached_yet.remove(point)
+                if self.end==False:
+                    self.moove(next_point)
+                    self.find()
+                    
+                
+            for point in self.points_not_reached_yet:
+                msg = self.network.receive()
+                self.msg = msg
+                if msg["header"] == "Key found":
+                    if msg["INFO"][2]==self.agent_id and self.get_key==False:
+                        #aller au point 
+                        #si self.x==msg["INFO"][0] and self.y==msg["INFO"][1] : self.get_key=True
+                        pass
+
+                if msg["header"] == "chest found":
+                    if msg["INFO"][2]==self.agent_id:
+                        if self.get_key==True : 
+                            #aller au point 
+                            #si self.x==msg["INFO"][0] and self.y==msg["INFO"][1] : self.end=True
+                            pass
+                        else:
+                            #sauvegarder les coordonénes de l'objectif, atteindre la clé en ensuite y aller
+                            pass
+                        
+                if self.end==False:
+                    self.moove(point)
+                    self.points_not_reached_yet.remove(point)
+                    self.find()
 
 
 
