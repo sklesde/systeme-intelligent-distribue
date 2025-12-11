@@ -3,7 +3,7 @@ import time
 import os
 
 # Dossier où se trouvent server.py et agent.py
-PROJECT_DIR = r"C:\Users\Seb\Desktop\Seb\Cours IPSA\A5\Systemes intelligents distribues\In512_Project_Student-main"
+PROJECT_DIR = r"C:\Users\Seb\Desktop\Seb\Cours IPSA\A5\Systemes intelligents distribues\systeme-intelligent-distribue\In512_Project_Student-main"
 
 def run_in_cmd(command):
     """

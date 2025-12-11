@@ -11,7 +11,7 @@ import numpy as np
 from my_constants import *
 from gui import GUI
 from time import sleep
-
+import random
 
 class Game:
     """ Handle the whole game """
@@ -23,7 +23,7 @@ class Game:
         self.agent_paths = [None]*nb_agents
         self.load_map(map_id)
         self.gui = GUI(self)
-        
+    
 
     
     def load_map(self, map_id):
@@ -53,6 +53,7 @@ class Game:
                     else:
                         self.add_val(item.x, item.y, 1)
 
+    
     
     def add_val(self, x, y, val):
         """ Add a value if x and y coordinates are in the range [map_w; map_h] """

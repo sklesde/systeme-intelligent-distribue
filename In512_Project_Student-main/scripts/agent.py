@@ -10,7 +10,7 @@ from my_constants import *
 from threading import Thread
 import numpy as np
 from time import sleep
-
+import time
 
 class Agent:
     """ Class that implements the behaviour of each agent based on their perception and communication with other agents """
@@ -52,8 +52,9 @@ class Agent:
             elif msg["header"] == GET_NB_CONNECTED_AGENTS:
                 self.nb_agent_connected = msg["nb_connected_agents"]
 
-            print("hellooo: ", msg)
-            print("agent_id ", self.agent_id)
+            print("position: ", msg)
+            #print("type clée msg", msg["cell_value"])
+            #print("agent_id ", self.agent_id)
             
 
     def wait_for_connected_agent(self):
@@ -114,54 +115,153 @@ class Agent:
 
     def moove(self, next_point):
         x_next, y_next = next_point
-
         dx = x_next - self.x
         dy = y_next - self.y
-
         move_vec = (dx, dy)
-
         if move_vec in self.moves:
             next_move = self.moves.index(move_vec)
         else:
             next_move = STAND
-
         cmds = {
             "header": MOVE,
             "direction": next_move,
         }
         self.network.send(cmds)
-        sleep(self.delay_to_moove)                
-    
+
+        # Enregistrer la position actuelle avant de bouger
+        if not hasattr(self, 'previous_positions'):
+            self.previous_positions = []
+        self.previous_positions.append((self.x, self.y))
+
+        sleep(self.delay_to_moove)
+             
+            
+    def search_around(self, x_center, y_center, line_points):
+        """Cherche la valeur 1 dans les cases autour de (x_center, y_center) en excluant les points de la ligne déjà visitée."""
+        # Créer une liste de tous les points autour en formant un chemin continu
+        all_around_points = [
+            (x_center - 2, y_center - 2), (x_center - 1, y_center - 2), (x_center, y_center - 2),
+            (x_center + 1, y_center - 2), (x_center + 2, y_center - 2),
+            (x_center + 2, y_center - 1), (x_center + 2, y_center),
+            (x_center + 2, y_center + 1), (x_center + 2, y_center + 2),
+            (x_center + 1, y_center + 2), (x_center, y_center + 2),
+            (x_center - 1, y_center + 2), (x_center - 2, y_center + 2),
+            (x_center - 2, y_center + 1), (x_center - 2, y_center),
+            (x_center - 2, y_center - 1)
+        ]
+
+        # Retirer les points qui sont sur la ligne déjà visitée
+        filtered_points = [point for point in all_around_points if point not in line_points]
+
+        print(f"Points à explorer : {filtered_points}")
+
+        # Explorer les points restants
+        while filtered_points:
+            x, y = filtered_points[0]
+            self.moove((x, y))
+            self.network.send({"header": GET_DATA, "x": x, "y": y})
+            time.sleep(0.1)
+            if hasattr(self, 'msg') and self.msg.get("header") == GET_DATA:
+                neighbor_val = self.msg.get("cell_val", None)
+                if neighbor_val == 1:
+                    print(f"Objet trouvé à (x={x}, y={y}) !")
+                    return True
+            filtered_points.pop(0)
+            print(f"Points restants : {filtered_points}")
+
+        return False
+
+    def value_cell_val(self):
+        self.network.send({"header": GET_DATA, "x": self.x, "y": self.y})
+        time.sleep(0.1)
+        cell_val = self.msg.get("cell_val")
+        return cell_val
+
+    def find(self, next_point):
+        """Détecte les valeurs 0.3 ou 0.25 et cherche la case de valeur 1 dans la direction du déplacement."""
+        try:
+            # 1. Récupérer la valeur de la case actuelle via la fonction dédiée
+            cell_val = self.value_cell_val()
+            if cell_val is None:
+                print("Aucune valeur trouvée sur cette case.")
+                return False
+
+            print(f"Valeur de la case actuelle : {cell_val}")
+
+            # 2. Si la valeur est 0.25 ou 0.3 → déclenche la recherche
+            if cell_val in [0.25, 0.3]:
+                print(f"Case de valeur {cell_val} détectée, recherche de la case 1...")
+
+                x_back, y_back = self.x, self.y
+                dx = next_point[0] - x_back
+                dy = next_point[1] - y_back
+                line_points = []
+
+                # Exemple pour direction droite → peut être adapté ensuite
+                if dx == 1 and dy == 0:
+                    print("Direction : Droite")
+
+                    # Ligne verticale parallèle à droite
+                    for i in range(-2, 3):
+                        check_x = x_back + 2
+                        check_y = y_back + i
+                        self.moove((check_x, check_y))
+                        line_points.append((check_x, check_y))
+
+                        # Lecture de la valeur
+                        val = self.value_cell_val()
+                        print(f"Test cellule ({check_x}, {check_y}) = {val}")
+
+                        if val == 1:
+                            print("Objet trouvé !")
+                            return True
+
+                else:
+                    print("Direction non gérée pour le moment.")
+
+                # 3. Recherche dans les alentours si la ligne n'a rien trouvé
+                print("Recherche autour…")
+                if self.search_around(x_back, y_back, line_points):
+                    return True
+
+                print("Aucune case de valeur 1 trouvée.")
+                return False
+
+            return False
+
+        except Exception as e:
+            print(f\"Erreur dans find(): {e}\")
+            return False
+
+
+
+
+
+
+
+
+
+
+
 
     def strategy(self):
-        self.way_to_the_closest_point()
-       
-        for next_point in self.goal_list:
-            self.moove(next_point)
+        if not self.points_not_reached_yet:
+            self.points_not_reached_yet = lists[self.agent_id].copy()
 
-        #print('goal_reached')
-
-        lst = lists[self.agent_id]
-        self.points_not_reached_yet = lst
-        i = lst.index(next_point)
-
-        for point in lst[i+1:]:
-            self.moove(point)
-            self.points_not_reached_yet.remove(point)
-        print(self.points_not_reached_yet)
-
-        if len(self.points_not_reached_yet)!=0:
-            self.closest_point = self.where_closest_point()
-
+        while self.points_not_reached_yet:
+            self.closest_point = self.where_closest_point(self.points_not_reached_yet)
             self.way_to_the_closest_point()
-       
+
             for next_point in self.goal_list:
+                self.find(next_point)
                 self.moove(next_point)
-            
-            for point in self.points_not_reached_yet:
-                        
-                self.moove(point)
-                self.points_not_reached_yet.remove(point)
+                
+
+                if next_point in self.points_not_reached_yet:
+                    self.points_not_reached_yet.remove(next_point)
+                print("Points restants :", self.points_not_reached_yet)
+
+
 
 
 
@@ -203,6 +303,3 @@ if __name__ == "__main__":
     
         pass
 # it is always the same location of the agent first location
-
-
-
