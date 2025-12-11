@@ -223,10 +223,10 @@ class Agent:
                         #sauvegarder les coordonénes de l'objectif, atteindre la clé en ensuite y aller
                         pass
                     
-            if self.end==False:
-                self.moove(point)
-                self.points_not_reached_yet.remove(point)
-                self.find()
+            
+            self.moove(point)
+            self.points_not_reached_yet.remove(point)
+            self.find()
 
 
         print(self.points_not_reached_yet)
