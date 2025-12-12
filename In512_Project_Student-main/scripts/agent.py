@@ -126,7 +126,6 @@ class Agent:
         if not hasattr(self, 'previous_positions'):
             self.previous_positions = []
         self.previous_positions.append((self.x, self.y))
-        print("caca",len(self.previous_positions),self.previous_positions)
         
         x_next, y_next = next_point
         dx = x_next - self.x
@@ -303,7 +302,6 @@ class Agent:
     def wall_detect(self):
         cell_val = self.value_cell_val()
 
-        print("valeru celle", cell_val)
         if cell_val==0.35: #zone du mur
             self.moove(self.previous_positions.pop()) #recule 
             self.previous_positions.pop()
@@ -393,32 +391,42 @@ class Agent:
             
             self.closest_point = self.where_closest_point(self.points_not_reached_yet)
             self.way_to_the_closest_point()
-
             for next_point in self.goal_list:
 
-                print("analyse")
-                self.find(next_point)
+                #self.find(next_point)
                 self.detect=self.wall_detect()
                 if not self.detect:
-                    print("ok, je bouge")
                     self.moove(next_point)
-
+                n=0
                 while self.detect:
-                    print("mur détecté")
+                    """
+                    useless=False
+                    for i in range(-1,1):
+                        for j in range(-1,1):
+                            if (next_point[0]+i,next_point[1]+j) in self.known_map.keys():
+                                if self.known_map[(next_point[0]+i,next_point[1]+j)]==0.35:
+                                    if next_point in self.points_not_reached_yet:
+                                        self.points_not_reached_yet.remove(next_point)
+                                        useless=True
+                    if useless==True:
+                        print("point skip")
+                        break
+                    """
+
                     self.pathstar=self.Astar(next_point)
                     for movestar in self.pathstar:
-                        print("hhhh",self.pathstar)
                         self.moove(movestar)
-                        self.find(next_point)
+                        #self.find(next_point)
                         self.detect=self.wall_detect()
 
                         if self.detect:
                             while self.wall_detect():
                                 continue
                             break
-                        
-                    if len(self.pathstar)==0:
+                    if len(self.pathstar)==0 or n==5:
                         self.detect=False
+                    
+                    n=n+1
                         
                     
                 if next_point in self.points_not_reached_yet:
