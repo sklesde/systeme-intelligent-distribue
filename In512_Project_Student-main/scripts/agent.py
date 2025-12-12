@@ -11,6 +11,9 @@ import numpy as np
 from time import sleep
 import time
 
+import heapq
+import math
+
 class Agent:
     """Class that implements the behaviour of each agent based on their perception and communication with other agents."""
 
@@ -42,7 +45,12 @@ class Agent:
         self.path_map = {}
         self.closest_point = None
         self.goal_list = []
+        #self.delay_to_moove = 0.5
         self.points_not_reached_yet = []
+        self.detect=False
+        self.claim_zone = []
+        self.key_pos = []
+        self.chest_pos = []
 
         # Envoi initial pour récupérer les données de l'environnement
         self.network.send({"header": GET_DATA})
@@ -232,6 +240,11 @@ class Agent:
             self.goal_list.append((x_current, y_current))
 
     def moove(self, next_point):
+
+        if not hasattr(self, 'previous_positions'):
+            self.previous_positions = []
+        self.previous_positions.append((self.x, self.y))
+        
         x_next, y_next = next_point
         dx = x_next - self.x
         dy = y_next - self.y
@@ -245,10 +258,15 @@ class Agent:
             "direction": next_move,
         }
         self.network.send(cmds)
-        if not hasattr(self, 'previous_positions'):
-            self.previous_positions = []
-        self.previous_positions.append((self.x, self.y))
+        
         sleep(self.delay_to_moove)
+
+        val = self.value_cell_val()
+        if not hasattr(self, "known_map"):
+            self.known_map = {}
+        
+        self.known_map[(self.x, self.y)] = val
+             
 
     def request_item_info(self, x, y, timeout=2.0):
         """Envoie une requête GET_ITEM_OWNER et attend la réponse."""
@@ -311,6 +329,45 @@ class Agent:
         })
         return True
 
+
+        
+            
+    def search_around(self, x_center, y_center, line_points):
+        """Cherche la valeur 1 dans les cases autour de (x_center, y_center) en excluant les points de la ligne déjà visitée."""
+        # Créer une liste de tous les points autour en formant un chemin continu
+        all_around_points = [
+            (x_center - 2, y_center - 2), (x_center - 1, y_center - 2), (x_center, y_center - 2),
+            (x_center + 1, y_center - 2), (x_center + 2, y_center - 2),
+            (x_center + 2, y_center - 1), (x_center + 2, y_center),
+            (x_center + 2, y_center + 1), (x_center + 2, y_center + 2),
+            (x_center + 1, y_center + 2), (x_center, y_center + 2),
+            (x_center - 1, y_center + 2), (x_center - 2, y_center + 2),
+            (x_center - 2, y_center + 1), (x_center - 2, y_center),
+            (x_center - 2, y_center - 1)
+        ]
+
+        # Retirer les points qui sont sur la ligne déjà visitée
+        filtered_points = [point for point in all_around_points if point not in line_points]
+
+        #print(f"Points à explorer : {filtered_points}")
+
+        # Explorer les points restants
+        while filtered_points:
+            x, y = filtered_points[0]
+            self.moove((x, y))
+            self.network.send({"header": GET_DATA, "x": x, "y": y})
+            time.sleep(0.1)
+            if hasattr(self, 'msg') and self.msg.get("header") == GET_DATA:
+                neighbor_val = self.msg.get("cell_val", None)
+                if neighbor_val == 1:
+                    #print(f"Objet trouvé à (x={x}, y={y}) !")
+                    return True
+            filtered_points.pop(0)
+            #print(f"Points restants : {filtered_points}")
+
+        return False
+
+ 
     def value_cell_val(self):
         """Récupère la valeur de la cellule actuelle."""
         self.network.send({"header": GET_DATA, "x": self.x, "y": self.y})
@@ -398,6 +455,14 @@ class Agent:
         except Exception as e:
             print(f"Erreur find(): {e}")
             return False
+        
+    def wall_detect(self):
+        cell_val = self.value_cell_val()
+        if cell_val==0.35: #zone du mur
+            self.moove(self.previous_positions.pop()) #recule 
+            self.previous_positions.pop()
+            return True
+        return False
 
     def strategy(self):
         """Stratégie principale de l'agent."""
@@ -438,18 +503,37 @@ class Agent:
                     if not self.points_not_reached_yet:
                         print(f"Aucun point à explorer pour l'agent {self.agent_id}. Utilisation d'une liste par défaut.")
                         self.points_not_reached_yet = [(self.x + 1, self.y)]
+                        print(f"Chemin vers le point le plus proche : {self.goal_list}")
+
 
             self.closest_point = self.where_closest_point(self.points_not_reached_yet)
             if self.closest_point == (self.x, self.y):
                 print(f"Le point le plus proche est la position actuelle pour l'agent {self.agent_id}. Recherche d'un autre point.")
 
             self.way_to_the_closest_point()
-            print(f"Chemin vers le point le plus proche : {self.goal_list}")
-
             for next_point in self.goal_list:
                 print(f"Déplacement vers le point {next_point}")
                 self.find(next_point)
-                self.moove(next_point)
+                self.detect=self.wall_detect()
+                if not self.detect:
+                    self.moove(next_point)
+                n=0
+                while self.detect:
+                    print("JJJJJJj",n)
+                    self.pathstar=self.Astar(next_point)
+                    for movestar in self.pathstar:
+                        self.moove(movestar)
+                        #self.find(next_point)
+                        self.detect=self.wall_detect()
+
+                        if self.detect:
+                            while self.wall_detect():
+                                continue
+                            break
+                    if len(self.pathstar)==0 or n==3:
+                        self.detect=False
+                    
+                    n=n+1
                 if next_point in self.points_not_reached_yet:
                     self.points_not_reached_yet.remove(next_point)
 
@@ -458,6 +542,80 @@ class Agent:
                 print("Position coffre:", self.chess_pos)
                 print("Claimed zone :", self.claim_zone)
                 print("Nombre d'objets trouvés :", self.nb_objects_found)
+
+
+    
+
+    def Astar(self, goal):
+        
+        start = (self.x, self.y)
+        goal = tuple(goal)
+
+        if start == goal:
+            return []
+
+        # Création carte interne
+        if not hasattr(self, "known_map"):
+            self.known_map = {}
+
+        # Directions possibles
+        neighbors = [
+            (-1, 0), (1, 0),
+            (0, -1), (0, 1),
+            (-1, -1), (-1, 1),
+            (1, -1), (1, 1)
+        ]
+
+        def h(a, b):
+            return math.hypot(a[0] - b[0], a[1] - b[1])
+
+        open = []
+        heapq.heappush(open, (h(start, goal), 0, start))
+        came_from = {}
+        g_score = {start: 0}
+        closed = set()
+
+        while open:
+            f, g, current = heapq.heappop(open)
+
+            if current in closed:
+                continue
+            closed.add(current)
+
+            if current == goal:
+                path = []
+                node = goal
+                while node != start:
+                    path.append(node)
+                    node = came_from[node]
+                path.reverse()
+                return path
+
+            cx, cy = current
+
+            for dx, dy in neighbors:
+                nx, ny = cx + dx, cy + dy
+
+                # limites monde
+                if nx < 0 or ny < 0 or nx >= self.w or ny >= self.h:
+                    continue
+
+                cell = self.known_map.get((nx, ny), "unknown")
+
+                # unknown → considéré libre
+                if cell == 0.35:  # obstacle connu
+                    continue
+
+                tentative_g = g + math.hypot(dx, dy)
+
+                if tentative_g < g_score.get((nx, ny), float("inf")):
+                    g_score[(nx, ny)] = tentative_g
+                    came_from[(nx, ny)] = current
+                    f_score = tentative_g + h((nx, ny), goal)
+                    heapq.heappush(open, (f_score, tentative_g, (nx, ny)))
+
+        return []  
+
 
 if __name__ == "__main__":
     from random import randint

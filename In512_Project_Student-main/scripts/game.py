@@ -32,15 +32,19 @@ class Game:
         with open(json_filename, "r") as json_file:
             self.map_cfg = json.load(json_file)[f"map_{map_id}"]        
         
-        self.agents, self.keys, self.boxes = [], [], []
+        self.agents, self.keys, self.boxes, self.walls = [], [], [], []
+
+        self.map_w, self.map_h = self.map_cfg["width"], self.map_cfg["height"]
+        self.map_real = np.zeros(shape=(self.map_h, self.map_w))
+
+
         for i in range(self.nb_agents):
             self.agents.append(Agent(i+1, self.map_cfg[f"agent_{i+1}"]["x"], self.map_cfg[f"agent_{i+1}"]["y"], self.map_cfg[f"agent_{i+1}"]["color"]))
             self.keys.append(Key(self.map_cfg[f"key_{i+1}"]["x"], self.map_cfg[f"key_{i+1}"]["y"]))
             self.boxes.append(Box(self.map_cfg[f"box_{i+1}"]["x"], self.map_cfg[f"box_{i+1}"]["y"]))
             self.agent_paths[i] = [(self.agents[i].x, self.agents[i].y)]
         
-        self.map_w, self.map_h = self.map_cfg["width"], self.map_cfg["height"]
-        self.map_real = np.zeros(shape=(self.map_h, self.map_w))
+       
         items = []
         items.extend(self.keys)
         items.extend(self.boxes)
@@ -52,6 +56,20 @@ class Game:
                         self.add_val(item.x + dx, item.y + dy, item.neighbour_percent/(i+1))
                     else:
                         self.add_val(item.x, item.y, 1)
+        
+        for wall_id in ["wall_1", "wall_2", "wall_3", "wall_4"]:
+            wall_cells = self.map_cfg.get(wall_id, {}).get("cells", [])
+            for cell in wall_cells:
+                x, y = cell
+                self.walls.append((x, y))
+                # cellule du mur = 1
+                self.add_val(x, y, 1)
+                # cellules adjacentes = 0.35
+                for dx in [-1, 0, 1]:
+                    for dy in [-1, 0, 1]:
+                        if dx == 0 and dy == 0:
+                            continue
+                        self.add_val(x + dx, y + dy, WALLS_NEIGHBOUR_PERCENTAGE)
 
     
     
@@ -129,3 +147,7 @@ class Key(Item):
 class Box(Item):
     def __init__(self, x, y):
         Item.__init__(self, x, y, BOX_NEIGHBOUR_PERCENTAGE, "box")
+
+class Walls(Item):
+    def __init__(self, x, y):
+        Item.__init__(self, x, y, WALLS_NEIGHBOUR_PERCENTAGE, "walls")
