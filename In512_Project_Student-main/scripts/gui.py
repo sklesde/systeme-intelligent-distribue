@@ -50,7 +50,6 @@ class GUI:
         self.wall_img = pygame.transform.scale(walls_img, (self.cell_size, self.cell_size))
         
 
-
     
     def on_event(self, event):
         if event.type == pygame.QUIT:

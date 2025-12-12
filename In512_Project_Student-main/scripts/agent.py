@@ -26,7 +26,7 @@ class Agent:
         self.agent_id = self.network.id
         self.running = True
         self.msg = {}
-        self.delay_to_moove = 0.05
+        self.delay_to_moove = 0.5
 
         # Initialisation des attributs d'état et de suivi
         self.all_keys_found = set()
@@ -102,12 +102,36 @@ class Agent:
     def move_to(self, target):
         """Déplacement pas-à-pas vers une cible, sans optimisations."""
         tx, ty = target
+        cx,cy=self.x,self.y
         while (self.x, self.y) != (tx, ty):
-            cx, cy = self.x, self.y
-            nx = cx + (1 if tx > cx else -1 if tx < cx else 0)
-            ny = cy + (1 if ty > cy else -1 if ty < cy else 0)
-            self.moove((nx, ny))
+                nx = cx + (1 if tx > cx else -1 if tx < cx else 0)
+                ny = cy + (1 if ty > cy else -1 if ty < cy else 0)
+                next_point= (nx,ny)
 
+                self.detect=self.wall_detect()
+                if not self.detect:
+                    self.moove(next_point)
+                    cx,cy=self.x,self.y
+
+                n=0
+                while self.detect:
+                    self.pathstar=self.Astar(next_point)
+                    for movestar in self.pathstar:
+                        self.moove(movestar)
+                        #self.find(next_point)
+                        self.detect=self.wall_detect()
+
+                        if self.detect:
+                            while self.wall_detect():
+                                continue
+                            break
+                    if len(self.pathstar)==0 or n==3:
+                        cx=nx
+                        cy=ny
+                        self.detect=False
+                    
+                    n=n+1
+                
     def in_own_items(self, position):
         """True si la position correspond à mon coffre ou ma clé connue."""
         return position in self.key_pos or position in self.chess_pos
@@ -519,7 +543,6 @@ class Agent:
                     self.moove(next_point)
                 n=0
                 while self.detect:
-                    print("JJJJJJj",n)
                     self.pathstar=self.Astar(next_point)
                     for movestar in self.pathstar:
                         self.moove(movestar)
@@ -536,6 +559,10 @@ class Agent:
                     n=n+1
                 if next_point in self.points_not_reached_yet:
                     self.points_not_reached_yet.remove(next_point)
+
+                if self.all_items_found():
+                    self.points_not_reached_yet=[]
+                    break
 
             if len(self.points_not_reached_yet) == 0:
                 print("Position clé", self.key_pos)
