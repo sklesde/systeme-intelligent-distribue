@@ -12,6 +12,9 @@ import numpy as np
 from time import sleep
 import time
 
+import heapq
+import math
+
 class Agent:
     """ Class that implements the behaviour of each agent based on their perception and communication with other agents """
     def __init__(self, server_ip):
@@ -36,8 +39,9 @@ class Agent:
         self.wait_for_connected_agent()
         self.closest_point = self.where_closest_point()
         self.goal_list = []
-        self.delay_to_moove = 0.2
+        self.delay_to_moove = 0.5
         self.points_not_reached_yet = []
+        self.detect=False
               
     def msg_cb(self): 
         """ Method used to handle incoming messages """
@@ -46,13 +50,13 @@ class Agent:
             self.msg = msg
             if msg["header"] == MOVE:
                 self.x, self.y =  msg["x"], msg["y"]
-                print(self.x, self.y)
+                #print(self.x, self.y)
             elif msg["header"] == GET_NB_AGENTS:
                 self.nb_agent_expected = msg["nb_agents"]
             elif msg["header"] == GET_NB_CONNECTED_AGENTS:
                 self.nb_agent_connected = msg["nb_connected_agents"]
 
-            print("position: ", msg)
+            #print("position: ", msg)
             #print("type clée msg", msg["cell_value"])
             #print("agent_id ", self.agent_id)
             
@@ -69,8 +73,8 @@ class Agent:
         for i in range(30):
             next_move = DOWN
             cmds={"header":MOVE,
-                    "direction":next_move
-                    }
+                "direction":next_move
+                }
             
             self.network.send(cmds)
             sleep(0.5)    
@@ -114,6 +118,13 @@ class Agent:
             
 
     def moove(self, next_point):
+
+        if not hasattr(self, 'previous_positions'):
+            self.previous_positions = []
+        self.previous_positions.append((self.x, self.y))
+        print("caca",len(self.previous_positions),self.previous_positions)
+        
+        
         x_next, y_next = next_point
         dx = x_next - self.x
         dy = y_next - self.y
@@ -128,12 +139,16 @@ class Agent:
         }
         self.network.send(cmds)
 
-        # Enregistrer la position actuelle avant de bouger
-        if not hasattr(self, 'previous_positions'):
-            self.previous_positions = []
-        self.previous_positions.append((self.x, self.y))
-
         sleep(self.delay_to_moove)
+
+        # Enregistrer la position actuelle avant de bouger
+        
+
+        val = self.value_cell_val()
+        if not hasattr(self, "known_map"):
+            self.known_map = {}
+        
+        self.known_map[(self.x, self.y)] = val
              
             
     def search_around(self, x_center, y_center, line_points):
@@ -153,7 +168,7 @@ class Agent:
         # Retirer les points qui sont sur la ligne déjà visitée
         filtered_points = [point for point in all_around_points if point not in line_points]
 
-        print(f"Points à explorer : {filtered_points}")
+        #print(f"Points à explorer : {filtered_points}")
 
         # Explorer les points restants
         while filtered_points:
@@ -164,10 +179,10 @@ class Agent:
             if hasattr(self, 'msg') and self.msg.get("header") == GET_DATA:
                 neighbor_val = self.msg.get("cell_val", None)
                 if neighbor_val == 1:
-                    print(f"Objet trouvé à (x={x}, y={y}) !")
+                    #print(f"Objet trouvé à (x={x}, y={y}) !")
                     return True
             filtered_points.pop(0)
-            print(f"Points restants : {filtered_points}")
+            #print(f"Points restants : {filtered_points}")
 
         return False
 
@@ -183,14 +198,14 @@ class Agent:
             # 1. Récupérer la valeur de la case actuelle via la fonction dédiée
             cell_val = self.value_cell_val()
             if cell_val is None:
-                print("Aucune valeur trouvée sur cette case.")
+                #print("Aucune valeur trouvée sur cette case.")
                 return False
 
-            print(f"Valeur de la case actuelle : {cell_val}")
+            #print(f"Valeur de la case actuelle : {cell_val}")
 
             # 2. Si la valeur est 0.25 ou 0.3 → déclenche la recherche
             if cell_val in [0.25, 0.3]:
-                print(f"Case de valeur {cell_val} détectée, recherche de la case 1...")
+                #print(f"Case de valeur {cell_val} détectée, recherche de la case 1...")
 
                 x_back, y_back = self.x, self.y
                 dx = next_point[0] - x_back
@@ -210,7 +225,7 @@ class Agent:
 
                         # Lecture de la valeur
                         val = self.value_cell_val()
-                        print(f"Test cellule ({check_x}, {check_y}) = {val}")
+                        #print(f"Test cellule ({check_x}, {check_y}) = {val}")
 
                         if val == 1:
                             print("Objet trouvé !")
@@ -224,7 +239,7 @@ class Agent:
                 if self.search_around(x_back, y_back, line_points):
                     return True
 
-                print("Aucune case de valeur 1 trouvée.")
+                #print("Aucune case de valeur 1 trouvée.")
                 return False
 
             return False
@@ -232,47 +247,132 @@ class Agent:
         except Exception as e:
             print(f"Erreur dans find(): {e}")
             return False
+        
+    def wall_detect(self):
+        cell_val = self.value_cell_val()
 
+        print("valeru celle", cell_val)
+        if cell_val==0.35: #zone du mur
+            self.moove(self.previous_positions.pop()) #recule 
+            self.previous_positions.pop()
+            
 
+            return True
+        return False
+    
 
+    def Astar(self, goal):
+        
+        start = (self.x, self.y)
+        goal = tuple(goal)
 
+        if start == goal:
+            return []
 
+        # Création carte interne
+        if not hasattr(self, "known_map"):
+            self.known_map = {}
 
+        # Directions possibles
+        neighbors = [
+            (-1, 0), (1, 0),
+            (0, -1), (0, 1),
+            (-1, -1), (-1, 1),
+            (1, -1), (1, 1)
+        ]
 
+        def h(a, b):
+            return math.hypot(a[0] - b[0], a[1] - b[1])
 
+        open = []
+        heapq.heappush(open, (h(start, goal), 0, start))
+        came_from = {}
+        g_score = {start: 0}
+        closed = set()
 
+        while open:
+            f, g, current = heapq.heappop(open)
 
+            if current in closed:
+                continue
+            closed.add(current)
+
+            if current == goal:
+                path = []
+                node = goal
+                while node != start:
+                    path.append(node)
+                    node = came_from[node]
+                path.reverse()
+                return path
+
+            cx, cy = current
+
+            for dx, dy in neighbors:
+                nx, ny = cx + dx, cy + dy
+
+                # limites monde
+                if nx < 0 or ny < 0 or nx >= self.w or ny >= self.h:
+                    continue
+
+                cell = self.known_map.get((nx, ny), "unknown")
+
+                # unknown → considéré libre
+                if cell == 0.35:  # obstacle connu
+                    continue
+
+                tentative_g = g + math.hypot(dx, dy)
+
+                if tentative_g < g_score.get((nx, ny), float("inf")):
+                    g_score[(nx, ny)] = tentative_g
+                    came_from[(nx, ny)] = current
+                    f_score = tentative_g + h((nx, ny), goal)
+                    heapq.heappush(open, (f_score, tentative_g, (nx, ny)))
+
+        return []  
 
 
     def strategy(self):
+        
         if not self.points_not_reached_yet:
             self.points_not_reached_yet = lists[self.agent_id].copy()
 
         while self.points_not_reached_yet:
+            
             self.closest_point = self.where_closest_point(self.points_not_reached_yet)
             self.way_to_the_closest_point()
 
             for next_point in self.goal_list:
-                self.find(next_point)
-                self.moove(next_point)
-                
 
+                print("analyse")
+                #self.find(next_point)
+                self.detect=self.wall_detect()
+                if not self.detect:
+                    print("ok, je bouge")
+                    self.moove(next_point)
+
+                while self.detect:
+                    print("mur détecté")
+                    self.pathstar=self.Astar(next_point)
+                    for movestar in self.pathstar:
+                        print("hhhh",self.pathstar)
+                        self.moove(movestar)
+                        self.detect=self.wall_detect()
+
+                        if self.detect:
+                            while self.wall_detect():
+                                continue
+                            break
+                        
+                    if len(self.pathstar)==0:
+                        self.detect=False
+                        
+                    
                 if next_point in self.points_not_reached_yet:
                     self.points_not_reached_yet.remove(next_point)
-                print("Points restants :", self.points_not_reached_yet)
 
-
-
-
-
-    
-         
-             
-
-
-            
-            
-         
+                #print("Points restants :", self.points_not_reached_yet)
+           
 
     #TODO: CREATE YOUR METHODS HERE...
 

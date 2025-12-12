@@ -45,6 +45,11 @@ class GUI:
         agent_img = pygame.image.load(img_folder + "/robot.png")
         agent_img = pygame.transform.scale(agent_img, (self.cell_size, self.cell_size))
         self.agents = [agent_img.copy() for _ in range(self.game.nb_agents)]
+        #walls
+        walls_img = pygame.image.load(img_folder + "/chou.jpg")
+        self.wall_img = pygame.transform.scale(walls_img, (self.cell_size, self.cell_size))
+        
+
 
     
     def on_event(self, event):
@@ -66,8 +71,9 @@ class GUI:
                 self.draw()
                 self.clock.tick(self.fps)
             self.on_cleanup()
-        except Exception:
-            pass
+        except Exception as e:
+            print("GUI ERROR :", e)
+            raise
     
 
     def draw(self):
@@ -77,6 +83,11 @@ class GUI:
             pygame.draw.line(self.screen, BLACK, (0, i*self.cell_size), (self.w*self.cell_size, i*self.cell_size))
         for j in range(1, self.w):
             pygame.draw.line(self.screen, BLACK, (j*self.cell_size, 0), (j*self.cell_size, self.h*self.cell_size))
+
+        # Draw walls
+        for wx, wy in self.game.walls:
+            self.screen.blit(self.wall_img, (wx*self.cell_size, wy*self.cell_size))
+
 
         for i in range(self.game.nb_agents):
             #agent_paths
@@ -96,4 +107,5 @@ class GUI:
             self.screen.blit(self.agents[i], self.agents[i].get_rect(center=(self.game.agents[i].x*self.cell_size + self.cell_size//2, self.game.agents[i].y*self.cell_size + self.cell_size//2)))
             self.screen.blit(self.text_agents[i], self.text_agents[i].get_rect(center=(self.game.agents[i].x*self.cell_size + self.cell_size-self.text_agents[i].get_width()//2, self.game.agents[i].y*self.cell_size + self.cell_size-self.text_agents[i].get_height()//2)))
 
+        
         pygame.display.update()
