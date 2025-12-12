@@ -42,6 +42,9 @@ class Agent:
         self.delay_to_moove = 0.5
         self.points_not_reached_yet = []
         self.detect=False
+        self.claim_zone = []
+        self.key_pos = []
+        self.chest_pos = []
               
     def msg_cb(self): 
         """ Method used to handle incoming messages """
@@ -56,6 +59,7 @@ class Agent:
             elif msg["header"] == GET_NB_CONNECTED_AGENTS:
                 self.nb_agent_connected = msg["nb_connected_agents"]
 
+            #print("position: ", msg)
             #print("position: ", msg)
             #print("type clée msg", msg["cell_value"])
             #print("agent_id ", self.agent_id)
@@ -124,7 +128,6 @@ class Agent:
         self.previous_positions.append((self.x, self.y))
         print("caca",len(self.previous_positions),self.previous_positions)
         
-        
         x_next, y_next = next_point
         dx = x_next - self.x
         dy = y_next - self.y
@@ -186,66 +189,115 @@ class Agent:
 
         return False
 
+ 
     def value_cell_val(self):
         self.network.send({"header": GET_DATA, "x": self.x, "y": self.y})
         time.sleep(0.1)
         cell_val = self.msg.get("cell_val")
         return cell_val
+    
+    def zone(self):
+        if (self.x, self.y) in self.claim_zone:  # Enlever les parenthèses après claim_zone
+            return True
+        else:
+            return False
+        
+    def new_zone(self, coord):
+        x, y = coord
+        if not hasattr(self, 'claim_zone'):
+            self.claim_zone = []  # Initialisation si elle n'existe pas
+
+        for dx in range(-2, 3):  # De -2 à +2 inclus
+            for dy in range(-2, 3):  # De -2 à +2 inclus
+                new_x, new_y = x + dx, y + dy
+                if (new_x, new_y) not in self.claim_zone:  # Éviter les doublons
+                    self.claim_zone.append((new_x, new_y))
+
+
+        # Parcourir toutes les cases dans un carré de côté 5 (distance max de 2)
+        for dx in range(-2, 3):  # De -2 à +2 inclus
+            for dy in range(-2, 3):  # De -2 à +2 inclus
+                new_x, new_y = x + dx, y + dy
+                # Ajouter la case à la liste
+                if (new_x, new_y) not in self.claim_zone:  # Éviter les doublons
+                    self.claim_zone.append((new_x, new_y))
+
+
 
     def find(self, next_point):
-        """Détecte les valeurs 0.3 ou 0.25 et cherche la case de valeur 1 dans la direction du déplacement."""
         try:
-            # 1. Récupérer la valeur de la case actuelle via la fonction dédiée
+            if self.zone() == True:
+                return
+            
             cell_val = self.value_cell_val()
-            if cell_val is None:
-                #print("Aucune valeur trouvée sur cette case.")
+
+            if cell_val not in [0.25, 0.3]:
+                print("Valeur initiale non valide.")
                 return False
 
-            #print(f"Valeur de la case actuelle : {cell_val}")
+            print(f"Détection {cell_val}, exploration des diagonales autour de cette case.")
+            x0, y0 = self.x, self.y  # Position de départ
+            DIAGONAL_MOVES = [(1, 1), (1, -1), (-1, -1), (-1, 1)]
 
-            # 2. Si la valeur est 0.25 ou 0.3 → déclenche la recherche
-            if cell_val in [0.25, 0.3]:
-                #print(f"Case de valeur {cell_val} détectée, recherche de la case 1...")
+            for i in DIAGONAL_MOVES:
+                self.moove((x0 + i[0], y0 + i[1]))
+                val = self.value_cell_val()
+                print(f"Valeur de la case {(x0 + i[0], y0 + i[1])} : {val}")
 
-                x_back, y_back = self.x, self.y
-                dx = next_point[0] - x_back
-                dy = next_point[1] - y_back
-                line_points = []
+                if val == 0:
+                    self.moove((x0, y0))  # Retour à la position initiale
 
-                # Exemple pour direction droite → peut être adapté ensuite
-                if dx == 1 and dy == 0:
-                    print("Direction : Droite")
+                # Si on trouve une case 0.25 ou 0.3
+                if val in [0.25, 0.3]:
+                    if i == (1, 1):  # Bas-droite
+                        print(f"Piste en bas-droite ! Déplacement vers (x0+1, y0) puis (x0+2, y0+1)")
+                        self.moove((x0 + 1, y0))
+                        self.moove((x0 + 2, y0 + 1))
+                        print("Valeur de la case finale :", self.value_cell_val())
+                        return 
+                    elif i == (1, -1):  # Haut-droite
+                        print(f"Piste en haut-droite ! Déplacement vers (x0+1, y0) puis (x0+2, y0-1)")
+                        self.moove((x0 + 1, y0))
+                        self.moove((x0 + 2, y0 - 1))
+                        print("Valeur de la case finale :", self.value_cell_val())
+                        return 
+                    elif i == (-1, -1):  # Haut-gauche
+                        print(f"Piste en haut-gauche ! Déplacement vers (x0-1, y0) puis (x0-2, y0-1)")
+                        self.moove((x0 - 1, y0))
+                        self.moove((x0 - 2, y0 - 1))
+                        print("Valeur de la case finale :", self.value_cell_val())
+                        return 
+                    elif i == (-1, 1):  # Bas-gauche
+                        print(f"Piste en bas-gauche ! Déplacement vers (x0-1, y0) puis (x0-2, y0+1)")
+                        self.moove((x0 - 1, y0))
+                        self.moove((x0 - 2, y0 + 1))
+                        print("Valeur de la case finale :", self.value_cell_val())
+                        return 
 
-                    # Ligne verticale parallèle à droite
-                    for i in range(-2, 3):
-                        check_x = x_back + 2
-                        check_y = y_back + i
-                        self.moove((check_x, check_y))
-                        line_points.append((check_x, check_y))
+                # Si on trouve une case 0.5 ou 0.6
+                if val in [0.5, 0.6]:
+                    print(f"Case de valeur {val} détectée. Exploration des cases adjacentes...")
+                    x1, y1 = self.x, self.y
+                    # Définition des 8 directions adjacentes (4 orthogonales + 4 diagonales)
+                    ADJACENT_MOVES = [(0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1)]
 
-                        # Lecture de la valeur
-                        val = self.value_cell_val()
-                        #print(f"Test cellule ({check_x}, {check_y}) = {val}")
+                    for move in ADJACENT_MOVES:
+                        new_x, new_y = x1 + move[0], y1 + move[1]
+                        self.moove((new_x, new_y))
+                        adjacent_val = self.value_cell_val()
+                        print(f"Valeur de la case adjacente {(new_x, new_y)} : {adjacent_val}")
 
-                        if val == 1:
-                            print("Objet trouvé !")
-                            return True
+                        if adjacent_val == 1:
+                            print(f"Objet trouvé en {(new_x, new_y)} !")
+                            self.new_zone((new_x, new_y))
+                            #On claim la zone
+                            return 
 
-                else:
-                    print("Direction non gérée pour le moment.")
-
-                # 3. Recherche dans les alentours si la ligne n'a rien trouvé
-                print("Recherche autour…")
-                if self.search_around(x_back, y_back, line_points):
-                    return True
-
-                #print("Aucune case de valeur 1 trouvée.")
-                return False
-
-            return False
+            print("Aucune piste valide trouvée.")
+            return 
 
         except Exception as e:
-            print(f"Erreur dans find(): {e}")
+            print(f"Erreur find(): {e}")
             return False
         
     def wall_detect(self):
@@ -345,7 +397,7 @@ class Agent:
             for next_point in self.goal_list:
 
                 print("analyse")
-                #self.find(next_point)
+                self.find(next_point)
                 self.detect=self.wall_detect()
                 if not self.detect:
                     print("ok, je bouge")
@@ -357,6 +409,7 @@ class Agent:
                     for movestar in self.pathstar:
                         print("hhhh",self.pathstar)
                         self.moove(movestar)
+                        self.find(next_point)
                         self.detect=self.wall_detect()
 
                         if self.detect:
