@@ -24,7 +24,7 @@ def run_in_cmd(command):
 # --- Lancement des programmes ---
 
 # Serveur
-n=3
+n=4
 run_in_cmd("py -3 scripts/server.py -mi 3 -nb "+str(n))
 
 # Pause légère pour éviter collision de ressources

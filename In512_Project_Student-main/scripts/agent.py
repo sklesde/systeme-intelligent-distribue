@@ -128,7 +128,10 @@ class Agent:
                     if len(self.pathstar)==0 or n==3:
                         cx=nx
                         cy=ny
-                        self.detect=False
+
+                        nx = cx + (1 if tx > cx else -1 if tx < cx else 0)
+                        ny = cy + (1 if ty > cy else -1 if ty < cy else 0)
+                        next_point= (nx,ny)
                     
                     n=n+1
                 
@@ -483,8 +486,12 @@ class Agent:
     def wall_detect(self):
         cell_val = self.value_cell_val()
         if cell_val==0.35: #zone du mur
-            self.moove(self.previous_positions.pop()) #recule 
-            self.previous_positions.pop()
+            self.known_map[(self.x, self.y)] = 0.35
+
+            if self.previous_positions:
+                self.moove(self.previous_positions.pop()) #recule 
+                self.previous_positions.pop()
+
             return True
         return False
 
